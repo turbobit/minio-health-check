@@ -18,10 +18,10 @@ MinIO 서버들의 헬스체크를 주기적으로 수행하고 모니터링하�
 
 ## 📦 모니터링 대상 서버
 
-- MinIO 1: http://minio1.closetoya.com:9000/minio/health/live
-- MinIO 2: http://minio2.closetoya.com:9000/minio/health/live
-- MinIO 3: http://minio3.closetoya.com:9000/minio/health/live
-- MinIO 4: http://minio4.closetoya.com:9000/minio/health/live
+- MinIO 1: http://minio1.your_server.com:9000/minio/health/live
+- MinIO 2: http://minio2.your_server.com:9000/minio/health/live
+- MinIO 3: http://minio3.your_server.com:9000/minio/health/live
+- MinIO 4: http://minio4.your_server.com:9000/minio/health/live
 
 ## 🛠️ 기술 스택
 
