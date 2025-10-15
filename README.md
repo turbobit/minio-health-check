@@ -12,6 +12,9 @@ MinIO 서버들의 헬스체크를 주기적으로 수행하고 모니터링하�
 - 📈 **알림 상태 표시**: 활성화된 알림 채널 상태 확인
 - 🔄 **자동 새로고침**: 30초마다 대시보드 자동 업데이트
 - 🛡️ **환경 변수 검증**: 주석 처리된 환경 변수는 자동으로 비활성화
+- 🔐 **OTP 인증**: Google Authenticator 등 OTP 앱을 통한 보안 인증
+- 📱 **QR 코드 등록**: OTP 앱 등록을 위한 QR 코드 자동 생성
+- ⚙️ **유연한 설정**: QR 코드 등록 단계를 건너뛸 수 있는 옵션
 
 ## 📦 모니터링 대상 서버
 
@@ -38,10 +41,10 @@ npm install
 
 ### 2. 환경 변수 설정
 
-`env.sample` 파일을 `.env.local`로 복사하고 실제 값으로 수정하세요:
+`.env.sample` 파일을 `.env.local`로 복사하고 실제 값으로 수정하세요:
 
 ```bash
-cp env.sample .env.local
+cp .env.sample .env.local
 ```
 
 또는 직접 `.env.local` 파일을 생성하고 다음 내용을 추가하세요:
@@ -59,6 +62,14 @@ EMAIL_TO=your-email@example.com
 
 # Cron Job 보안 (선택사항)
 CRON_SECRET=your-secret-key-here
+
+# OTP 인증 설정 (선택사항)
+OTP_SECRET=JBSWY3DPEHPK3PXP
+OTP_ISSUER=MinIO Health Monitor
+SESSION_SECRET=your-session-secret-key-32-chars
+
+# QR 코드 등록 페이지 표시 여부 (선택사항)
+SHOW_QR_SETUP=true
 ```
 
 ### 3. 개발 서버 실행
@@ -134,6 +145,36 @@ curl http://localhost:3000/api/notification-status
 curl -X POST http://localhost:3000/api/test-webhook
 ```
 
+### GET /api/auth/status
+인증 상태를 확인합니다.
+
+```bash
+curl http://localhost:3000/api/auth/status
+```
+
+### GET /api/auth/otp/setup
+OTP 설정 정보를 조회합니다. (QR 코드 포함, SHOW_QR_SETUP=true일 때만 사용 가능)
+
+```bash
+curl http://localhost:3000/api/auth/otp/setup
+```
+
+### POST /api/auth/otp/verify
+OTP 토큰을 검증하고 세션을 생성합니다.
+
+```bash
+curl -X POST http://localhost:3000/api/auth/otp/verify \
+  -H "Content-Type: application/json" \
+  -d '{"token": "123456"}'
+```
+
+### POST /api/auth/logout
+로그아웃하고 세션을 삭제합니다.
+
+```bash
+curl -X POST http://localhost:3000/api/auth/logout
+```
+
 ## 🔔 알림 설정
 
 ### Slack 알림
@@ -163,6 +204,54 @@ curl -X POST http://localhost:3000/api/test-webhook
 - 환경 변수가 주석 처리(`#`)되어 있으면 해당 알림 채널은 자동으로 비활성화됩니다
 - 빈 문자열이나 undefined인 경우에도 비활성화됩니다
 - URL 형식 검증을 통해 잘못된 설정을 사전에 방지합니다
+
+## 🔐 OTP 인증 설정
+
+### OTP 인증 활성화
+
+OTP 인증을 사용하려면 다음 환경 변수를 설정하세요:
+
+```env
+# OTP 시크릿 키 (32자리 Base32 문자열)
+OTP_SECRET=JBSWY3DPEHPK3PXP
+
+# OTP 앱에서 표시될 이름
+OTP_ISSUER=MinIO Health Monitor
+
+# 세션 암호화 키 (32자리)
+SESSION_SECRET=your-session-secret-key-32-chars
+```
+
+### QR 코드 등록 설정
+
+`SHOW_QR_SETUP` 환경 변수로 QR 코드 등록 단계를 제어할 수 있습니다:
+
+```env
+# true: QR 코드 등록 페이지 표시 (기본값)
+SHOW_QR_SETUP=true
+
+# false: QR 코드 등록 단계를 건너뛰고 바로 OTP 입력 페이지 표시
+SHOW_QR_SETUP=false
+```
+
+### OTP 앱 등록 방법
+
+1. **QR 코드 등록 (SHOW_QR_SETUP=true)**:
+   - Google Authenticator, Authy, Microsoft Authenticator 등 설치
+   - 대시보드에서 QR 코드 스캔
+   - 또는 수동으로 시크릿 키 입력
+
+2. **수동 등록 (SHOW_QR_SETUP=false)**:
+   - OTP 앱에서 수동으로 계정 추가
+   - 서비스명: `MinIO Health Monitor`
+   - 시크릿 키: 환경 변수의 `OTP_SECRET` 값 입력
+
+### OTP 인증 사용법
+
+1. OTP 앱에서 6자리 코드 확인
+2. 대시보드에 코드 입력
+3. 인증 성공 시 대시보드 접근 가능
+4. 세션은 브라우저를 닫을 때까지 유지됩니다
 
 ## 🎨 대시보드 화면
 
@@ -235,6 +324,22 @@ MIT
 1. **Vercel Pro 플랜**: Cron Job은 Vercel Pro 플랜 이상에서만 지원됩니다
 2. **환경 변수**: `CRON_SECRET`이 설정된 경우 올바른 값으로 호출되는지 확인
 3. **Vercel 대시보드**: Cron Jobs 탭에서 실행 상태 확인
+
+### OTP 인증 관련 문제
+
+1. **OTP 코드가 인증되지 않는 경우**:
+   - 서버와 OTP 앱의 시간 동기화 확인
+   - `OTP_SECRET` 환경 변수가 올바르게 설정되었는지 확인
+   - OTP 앱에 올바른 시크릿 키가 등록되었는지 확인
+
+2. **QR 코드 등록이 보이지 않는 경우**:
+   - `SHOW_QR_SETUP=true`로 설정되어 있는지 확인
+   - 서버 재시작 후 다시 시도
+
+3. **OTP 인증이 작동하지 않는 경우**:
+   - `OTP_SECRET` 환경 변수가 설정되어 있는지 확인
+   - `SESSION_SECRET` 환경 변수가 설정되어 있는지 확인
+   - 브라우저 캐시 삭제 후 다시 시도
 
 ## 📝 라이선스
 
