@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { sendNotifications } from '@/lib/notification';
 import { getNotificationStatus } from '@/lib/notification';
+import { checkAllMinioServers } from '@/lib/minio-health';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 /**
  * POST /api/test-webhook
- * 웹훅 테스트용 더미 데이터로 알림 전송
+ * 실제 MinIO 서버 상태로 웹훅 테스트 알림 전송
  */
 export async function POST() {
   try {
@@ -24,40 +25,40 @@ export async function POST() {
       );
     }
 
-    // 테스트용 더미 데이터 생성
-    const testResults = [
-      {
-        server: 'MinIO 1 (테스트)',
-        url: 'http://minio1.closetoya.com:9000/minio/health/live',
-        status: 'error' as const,
-        statusCode: 500,
-        responseTime: 1200,
-        error: 'Connection timeout (테스트 알림)',
-        timestamp: new Date().toISOString(),
-      },
-      {
-        server: 'MinIO 2 (테스트)',
-        url: 'http://minio2.closetoya.com:9000/minio/health/live',
-        status: 'unhealthy' as const,
-        statusCode: 404,
-        responseTime: 800,
-        timestamp: new Date().toISOString(),
-      },
-    ];
-
-    console.log('🧪 웹훅 테스트 시작');
+    console.log('🧪 웹훅 테스트 시작 - 실제 서버 상태 확인 중...');
     
-    // 알림 전송
+    // 실제 MinIO 서버 상태 확인
+    const actualResults = await checkAllMinioServers();
+    
+    // 테스트용으로 서버명에 "(웹훅 테스트)" 추가
+    const testResults = actualResults.map(result => ({
+      ...result,
+      server: `${result.server} (웹훅 테스트)`,
+    }));
+
+    console.log(`🧪 실제 서버 상태: ${actualResults.length}개 서버 확인 완료`);
+    console.log(`   - 정상: ${actualResults.filter(r => r.status === 'healthy').length}개`);
+    console.log(`   - 문제: ${actualResults.filter(r => r.status !== 'healthy').length}개`);
+    
+    // 알림 전송 (정상이어도 항상 전송)
+    console.log(`📢 웹훅 테스트 알림 전송 - ${testResults.length}개 서버 상태`);
     await sendNotifications(testResults);
     
     console.log('🧪 웹훅 테스트 완료');
 
     return NextResponse.json({
       success: true,
-      message: `테스트 알림이 ${status.total}개 채널로 전송되었습니다.`,
+      message: `실제 서버 상태로 테스트 알림이 ${status.total}개 채널로 전송되었습니다.`,
       timestamp: new Date().toISOString(),
       notifications: status,
-      testData: testResults,
+      actualResults: actualResults,
+      testResults: testResults,
+      summary: {
+        total: actualResults.length,
+        healthy: actualResults.filter(r => r.status === 'healthy').length,
+        unhealthy: actualResults.filter(r => r.status !== 'healthy').length,
+        notificationSent: true
+      }
     });
   } catch (error: any) {
     console.error('❌ 웹훅 테스트 실패:', error);

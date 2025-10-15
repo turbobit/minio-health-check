@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { HealthCheckResult } from '@/lib/minio-health';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface NotificationStatus {
   slack: boolean;
@@ -48,9 +49,46 @@ export default function Home() {
       if (data.success) {
         setResults(data.results);
         setLastUpdate(new Date().toLocaleString('ko-KR'));
+        
+        const healthyCount = data.results.filter((r: HealthCheckResult) => r.status === 'healthy').length;
+        const totalCount = data.results.length;
+        const problemCount = totalCount - healthyCount;
+        
+        if (problemCount === 0) {
+          toast.success(
+            <div>
+              <div className="font-semibold">✅ 헬스체크 완료</div>
+              <div className="text-sm mt-1">모든 서버가 정상입니다 ({healthyCount}/{totalCount})</div>
+            </div>,
+            { duration: 3000 }
+          );
+        } else {
+          toast.error(
+            <div>
+              <div className="font-semibold">⚠️ 서버 문제 발견</div>
+              <div className="text-sm mt-1">{problemCount}개 서버에 문제가 있습니다 ({healthyCount}/{totalCount})</div>
+            </div>,
+            { duration: 5000 }
+          );
+        }
+      } else {
+        toast.error(
+          <div>
+            <div className="font-semibold">❌ 헬스체크 실패</div>
+            <div className="text-sm mt-1">{data.error}</div>
+          </div>,
+          { duration: 5000 }
+        );
       }
     } catch (error) {
       console.error('헬스체크 실행 실패:', error);
+      toast.error(
+        <div>
+          <div className="font-semibold">❌ 헬스체크 오류</div>
+          <div className="text-sm mt-1">네트워크 오류가 발생했습니다.</div>
+        </div>,
+        { duration: 5000 }
+      );
     } finally {
       setLoading(false);
     }
@@ -64,13 +102,39 @@ export default function Home() {
       const data = await response.json();
       
       if (data.success) {
-        alert(`✅ 웹훅 테스트 성공!\n${data.message}`);
+        const summary = data.summary;
+        
+        // 성공 toast
+        toast.success(
+          <div>
+            <div className="font-semibold">✅ 웹훅 테스트 완료!</div>
+            <div className="text-sm mt-1">
+              📊 서버 상태: 전체 {summary.total}개 (정상 {summary.healthy}개, 문제 {summary.unhealthy}개)
+            </div>
+            <div className="text-sm">
+              📢 알림 전송: {data.notifications.total}개 채널로 전송됨
+            </div>
+          </div>,
+          { duration: 5000 }
+        );
       } else {
-        alert(`❌ 웹훅 테스트 실패!\n${data.error}`);
+        toast.error(
+          <div>
+            <div className="font-semibold">❌ 웹훅 테스트 실패!</div>
+            <div className="text-sm mt-1">{data.error}</div>
+          </div>,
+          { duration: 5000 }
+        );
       }
     } catch (error) {
       console.error('웹훅 테스트 실패:', error);
-      alert('❌ 웹훅 테스트 중 오류가 발생했습니다.');
+      toast.error(
+        <div>
+          <div className="font-semibold">❌ 웹훅 테스트 오류</div>
+          <div className="text-sm mt-1">네트워크 오류가 발생했습니다.</div>
+        </div>,
+        { duration: 5000 }
+      );
     } finally {
       setWebhookLoading(false);
     }
@@ -148,6 +212,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: '#fff',
+            color: '#333',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+          },
+        }}
+      />
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">

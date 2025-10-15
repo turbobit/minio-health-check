@@ -42,54 +42,99 @@ export async function sendSlackNotification(results: HealthCheckResult[]): Promi
   }
 
   const unhealthyServers = results.filter(r => r.status !== 'healthy');
+  const healthyServers = results.filter(r => r.status === 'healthy');
   
-  if (unhealthyServers.length === 0) {
-    return; // 모두 정상이면 알림 안 보냄
+  let message;
+  
+  if (unhealthyServers.length > 0) {
+    message = {
+      text: '🚨 MinIO 서버 헬스체크 경고',
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '🚨 MinIO 서버 헬스체크 경고',
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${unhealthyServers.length}개* 서버에 문제가 감지되었습니다.`,
+          },
+        },
+        {
+          type: 'divider',
+        },
+        ...unhealthyServers.map(server => ({
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*서버:*\n${server.server}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*상태:*\n${server.status === 'error' ? '❌ 에러' : '⚠️ 비정상'}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*URL:*\n${server.url}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*에러:*\n${server.error || server.statusCode || 'N/A'}`,
+            },
+          ],
+        })),
+      ],
+    };
+  } else {
+    message = {
+      text: '✅ MinIO 서버 헬스체크 완료',
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '✅ MinIO 서버 헬스체크 완료',
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${healthyServers.length}개* 서버가 모두 정상입니다.`,
+          },
+        },
+        {
+          type: 'divider',
+        },
+        ...healthyServers.map(server => ({
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*서버:*\n${server.server}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*상태:*\n✅ 정상`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*URL:*\n${server.url}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*응답시간:*\n${server.responseTime || 'N/A'}ms`,
+            },
+          ],
+        })),
+      ],
+    };
   }
-
-  const message = {
-    text: '🚨 MinIO 서버 헬스체크 경고',
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: '🚨 MinIO 서버 헬스체크 경고',
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*${unhealthyServers.length}개* 서버에 문제가 감지되었습니다.`,
-        },
-      },
-      {
-        type: 'divider',
-      },
-      ...unhealthyServers.map(server => ({
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*서버:*\n${server.server}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*상태:*\n${server.status === 'error' ? '❌ 에러' : '⚠️ 비정상'}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*URL:*\n${server.url}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*에러:*\n${server.error || server.statusCode || 'N/A'}`,
-          },
-        ],
-      })),
-    ],
-  };
 
   try {
     await fetch(webhookUrl, {
@@ -123,31 +168,49 @@ export async function sendMattermostNotification(results: HealthCheckResult[]): 
   }
 
   const unhealthyServers = results.filter(r => r.status !== 'healthy');
+  const healthyServers = results.filter(r => r.status === 'healthy');
   
-  if (unhealthyServers.length === 0) {
-    return; // 모두 정상이면 알림 안 보냄
-  }
-
   // Mattermost 메시지 포맷
-  let message = `## 🚨 MinIO 서버 헬스체크 경고\n\n`;
-  message += `**${unhealthyServers.length}개** 서버에 문제가 감지되었습니다.\n\n`;
-  message += `---\n\n`;
+  let message = '';
+  
+  if (unhealthyServers.length > 0) {
+    message += `## 🚨 MinIO 서버 헬스체크 경고\n\n`;
+    message += `**${unhealthyServers.length}개** 서버에 문제가 감지되었습니다.\n\n`;
+    message += `---\n\n`;
 
-  unhealthyServers.forEach(server => {
-    message += `### ${server.server}\n`;
-    message += `- **상태**: ${server.status === 'error' ? '❌ 에러' : '⚠️ 비정상'}\n`;
-    message += `- **URL**: \`${server.url}\`\n`;
-    if (server.statusCode) {
-      message += `- **상태 코드**: ${server.statusCode}\n`;
-    }
-    if (server.responseTime) {
-      message += `- **응답 시간**: ${server.responseTime}ms\n`;
-    }
-    if (server.error) {
-      message += `- **에러**: \`${server.error}\`\n`;
-    }
-    message += `- **시간**: ${new Date(server.timestamp).toLocaleString('ko-KR')}\n\n`;
-  });
+    unhealthyServers.forEach(server => {
+      message += `### ${server.server}\n`;
+      message += `- **상태**: ${server.status === 'error' ? '❌ 에러' : '⚠️ 비정상'}\n`;
+      message += `- **URL**: \`${server.url}\`\n`;
+      if (server.statusCode) {
+        message += `- **상태 코드**: ${server.statusCode}\n`;
+      }
+      if (server.responseTime) {
+        message += `- **응답 시간**: ${server.responseTime}ms\n`;
+      }
+      if (server.error) {
+        message += `- **에러**: \`${server.error}\`\n`;
+      }
+      message += `- **시간**: ${new Date(server.timestamp).toLocaleString('ko-KR')}\n\n`;
+    });
+  } else {
+    message += `## ✅ MinIO 서버 헬스체크 완료\n\n`;
+    message += `**${healthyServers.length}개** 서버가 모두 정상입니다.\n\n`;
+    message += `---\n\n`;
+
+    healthyServers.forEach(server => {
+      message += `### ${server.server}\n`;
+      message += `- **상태**: ✅ 정상\n`;
+      message += `- **URL**: \`${server.url}\`\n`;
+      if (server.statusCode) {
+        message += `- **상태 코드**: ${server.statusCode}\n`;
+      }
+      if (server.responseTime) {
+        message += `- **응답 시간**: ${server.responseTime}ms\n`;
+      }
+      message += `- **시간**: ${new Date(server.timestamp).toLocaleString('ko-KR')}\n\n`;
+    });
+  }
 
   const payload = {
     text: message,
@@ -189,18 +252,23 @@ export async function sendEmailNotification(results: HealthCheckResult[]): Promi
   }
 
   const unhealthyServers = results.filter(r => r.status !== 'healthy');
+  const healthyServers = results.filter(r => r.status === 'healthy');
   
-  if (unhealthyServers.length === 0) {
-    return;
-  }
-
   // 실제 이메일 전송은 SendGrid, AWS SES 등의 서비스를 사용해야 합니다
   // 여기서는 간단한 예시만 제공합니다
-  console.log('이메일 알림:', {
-    to: emailTo,
-    subject: `MinIO 헬스체크 경고: ${unhealthyServers.length}개 서버 문제 발생`,
-    servers: unhealthyServers,
-  });
+  if (unhealthyServers.length > 0) {
+    console.log('이메일 알림 (문제 서버):', {
+      to: emailTo,
+      subject: `MinIO 헬스체크 경고: ${unhealthyServers.length}개 서버 문제 발생`,
+      servers: unhealthyServers,
+    });
+  } else {
+    console.log('이메일 알림 (정상 서버):', {
+      to: emailTo,
+      subject: `MinIO 헬스체크 완료: ${healthyServers.length}개 서버 모두 정상`,
+      servers: healthyServers,
+    });
+  }
 }
 
 /**
