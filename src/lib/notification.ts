@@ -75,6 +75,64 @@ export async function sendSlackNotification(results: HealthCheckResult[]): Promi
 }
 
 /**
+ * Mattermost로 알림 전송
+ */
+export async function sendMattermostNotification(results: HealthCheckResult[]): Promise<void> {
+  const webhookUrl = process.env.MATTERMOST_WEBHOOK_URL;
+  
+  if (!webhookUrl) {
+    console.log('Mattermost webhook URL이 설정되지 않았습니다.');
+    return;
+  }
+
+  const unhealthyServers = results.filter(r => r.status !== 'healthy');
+  
+  if (unhealthyServers.length === 0) {
+    return; // 모두 정상이면 알림 안 보냄
+  }
+
+  // Mattermost 메시지 포맷
+  let message = `## 🚨 MinIO 서버 헬스체크 경고\n\n`;
+  message += `**${unhealthyServers.length}개** 서버에 문제가 감지되었습니다.\n\n`;
+  message += `---\n\n`;
+
+  unhealthyServers.forEach(server => {
+    message += `### ${server.server}\n`;
+    message += `- **상태**: ${server.status === 'error' ? '❌ 에러' : '⚠️ 비정상'}\n`;
+    message += `- **URL**: \`${server.url}\`\n`;
+    if (server.statusCode) {
+      message += `- **상태 코드**: ${server.statusCode}\n`;
+    }
+    if (server.responseTime) {
+      message += `- **응답 시간**: ${server.responseTime}ms\n`;
+    }
+    if (server.error) {
+      message += `- **에러**: \`${server.error}\`\n`;
+    }
+    message += `- **시간**: ${new Date(server.timestamp).toLocaleString('ko-KR')}\n\n`;
+  });
+
+  const payload = {
+    text: message,
+    username: 'MinIO Health Monitor',
+    icon_url: 'https://min.io/resources/img/logo/MINIO_wordmark.png',
+    channel: process.env.MATTERMOST_CHANNEL || '',
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.error('Mattermost 알림 전송 실패:', error);
+  }
+}
+
+/**
  * 이메일로 알림 전송 (선택사항)
  */
 export async function sendEmailNotification(results: HealthCheckResult[]): Promise<void> {
@@ -106,6 +164,7 @@ export async function sendEmailNotification(results: HealthCheckResult[]): Promi
 export async function sendNotifications(results: HealthCheckResult[]): Promise<void> {
   await Promise.all([
     sendSlackNotification(results),
+    sendMattermostNotification(results),
     sendEmailNotification(results),
   ]);
 }

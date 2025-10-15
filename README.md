@@ -35,11 +35,21 @@ npm install
 
 ### 2. 환경 변수 설정
 
-`.env.local` 파일을 생성하고 다음 내용을 추가하세요:
+`env.sample` 파일을 `.env.local`로 복사하고 실제 값으로 수정하세요:
+
+```bash
+cp env.sample .env.local
+```
+
+또는 직접 `.env.local` 파일을 생성하고 다음 내용을 추가하세요:
 
 ```env
 # Slack 알림 (선택사항)
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# Mattermost 알림 (선택사항)
+MATTERMOST_WEBHOOK_URL=https://your-mattermost.com/hooks/YOUR_WEBHOOK_ID
+MATTERMOST_CHANNEL=your-channel-name
 
 # 이메일 알림 (선택사항)
 EMAIL_TO=your-email@example.com
@@ -73,7 +83,7 @@ git push -u origin main
 1. [Vercel](https://vercel.com)에 로그인
 2. "New Project" 클릭
 3. GitHub 저장소 선택
-4. 환경 변수 설정 (SLACK_WEBHOOK_URL 등)
+4. 환경 변수 설정 (SLACK_WEBHOOK_URL, MATTERMOST_WEBHOOK_URL 등)
 5. "Deploy" 클릭
 
 ### 3. Vercel Cron 활성화
@@ -114,6 +124,13 @@ curl http://localhost:3000/api/cron
 1. Slack Workspace에서 Incoming Webhook 생성
 2. Webhook URL을 `.env.local`의 `SLACK_WEBHOOK_URL`에 추가
 3. 서버에 문제가 발생하면 자동으로 Slack 메시지 전송
+
+### Mattermost 알림
+
+1. Mattermost에서 Incoming Webhook 생성
+2. Webhook URL을 `.env.local`의 `MATTERMOST_WEBHOOK_URL`에 추가
+3. (선택사항) 특정 채널에 알림을 보내려면 `MATTERMOST_CHANNEL` 설정
+4. 서버에 문제가 발생하면 자동으로 Mattermost 메시지 전송
 
 ### 이메일 알림
 
