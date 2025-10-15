@@ -1,13 +1,43 @@
 import { HealthCheckResult } from './minio-health';
 
 /**
+ * 환경 변수 검증 유틸리티
+ */
+function isValidEnvVar(value: string | undefined): boolean {
+  return value !== undefined && value.trim() !== '' && !value.trim().startsWith('#');
+}
+
+/**
+ * 알림 설정 상태 확인
+ */
+export function getNotificationStatus() {
+  const slackEnabled = isValidEnvVar(process.env.SLACK_WEBHOOK_URL);
+  const mattermostEnabled = isValidEnvVar(process.env.MATTERMOST_WEBHOOK_URL);
+  const emailEnabled = isValidEnvVar(process.env.EMAIL_TO);
+
+  return {
+    slack: slackEnabled,
+    mattermost: mattermostEnabled,
+    email: emailEnabled,
+    total: [slackEnabled, mattermostEnabled, emailEnabled].filter(Boolean).length,
+  };
+}
+
+/**
  * Slack으로 알림 전송
  */
 export async function sendSlackNotification(results: HealthCheckResult[]): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   
-  if (!webhookUrl) {
-    console.log('Slack webhook URL이 설정되지 않았습니다.');
+  // 환경 변수 검증
+  if (!isValidEnvVar(webhookUrl)) {
+    console.log('🔕 Slack 알림 비활성화: SLACK_WEBHOOK_URL 환경 변수가 설정되지 않았거나 주석 처리됨');
+    return;
+  }
+
+  // URL 형식 검증
+  if (!webhookUrl!.startsWith('https://hooks.slack.com/')) {
+    console.log('❌ Slack webhook URL 형식이 올바르지 않습니다.');
     return;
   }
 
@@ -80,8 +110,15 @@ export async function sendSlackNotification(results: HealthCheckResult[]): Promi
 export async function sendMattermostNotification(results: HealthCheckResult[]): Promise<void> {
   const webhookUrl = process.env.MATTERMOST_WEBHOOK_URL;
   
-  if (!webhookUrl) {
-    console.log('Mattermost webhook URL이 설정되지 않았습니다.');
+  // 환경 변수 검증
+  if (!isValidEnvVar(webhookUrl)) {
+    console.log('🔕 Mattermost 알림 비활성화: MATTERMOST_WEBHOOK_URL 환경 변수가 설정되지 않았거나 주석 처리됨');
+    return;
+  }
+
+  // URL 형식 검증 (Mattermost는 다양한 도메인을 가질 수 있으므로 기본적인 HTTP/HTTPS 검증)
+  if (!webhookUrl!.startsWith('http://') && !webhookUrl!.startsWith('https://')) {
+    console.log('❌ Mattermost webhook URL 형식이 올바르지 않습니다.');
     return;
   }
 
@@ -138,8 +175,16 @@ export async function sendMattermostNotification(results: HealthCheckResult[]): 
 export async function sendEmailNotification(results: HealthCheckResult[]): Promise<void> {
   const emailTo = process.env.EMAIL_TO;
   
-  if (!emailTo) {
-    console.log('이메일 수신자가 설정되지 않았습니다.');
+  // 환경 변수 검증
+  if (!isValidEnvVar(emailTo)) {
+    console.log('🔕 이메일 알림 비활성화: EMAIL_TO 환경 변수가 설정되지 않았거나 주석 처리됨');
+    return;
+  }
+
+  // 이메일 형식 검증 (간단한 검증)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(emailTo!)) {
+    console.log('❌ 이메일 형식이 올바르지 않습니다.');
     return;
   }
 
@@ -162,10 +207,16 @@ export async function sendEmailNotification(results: HealthCheckResult[]): Promi
  * 알림 전송
  */
 export async function sendNotifications(results: HealthCheckResult[]): Promise<void> {
+  const status = getNotificationStatus();
+  
+  console.log(`📢 알림 전송 시작 - 활성화된 채널: ${status.total}개 (Slack: ${status.slack ? '✅' : '❌'}, Mattermost: ${status.mattermost ? '✅' : '❌'}, Email: ${status.email ? '✅' : '❌'})`);
+  
   await Promise.all([
     sendSlackNotification(results),
     sendMattermostNotification(results),
     sendEmailNotification(results),
   ]);
+  
+  console.log('📢 알림 전송 완료');
 }
 

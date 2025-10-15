@@ -3,11 +3,25 @@
 import { useState, useEffect } from 'react';
 import { HealthCheckResult } from '@/lib/minio-health';
 
+interface NotificationStatus {
+  slack: boolean;
+  mattermost: boolean;
+  email: boolean;
+  total: number;
+}
+
 export default function Home() {
   const [results, setResults] = useState<HealthCheckResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [webhookLoading, setWebhookLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>({
+    slack: false,
+    mattermost: false,
+    email: false,
+    total: 0,
+  });
 
   // 헬스체크 결과 가져오기
   const fetchHealthStatus = async () => {
@@ -42,12 +56,50 @@ export default function Home() {
     }
   };
 
+  // 웹훅 테스트 실행
+  const runWebhookTest = async () => {
+    setWebhookLoading(true);
+    try {
+      const response = await fetch('/api/test-webhook', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`✅ 웹훅 테스트 성공!\n${data.message}`);
+      } else {
+        alert(`❌ 웹훅 테스트 실패!\n${data.error}`);
+      }
+    } catch (error) {
+      console.error('웹훅 테스트 실패:', error);
+      alert('❌ 웹훅 테스트 중 오류가 발생했습니다.');
+    } finally {
+      setWebhookLoading(false);
+    }
+  };
+
+  // 알림 상태 조회
+  const fetchNotificationStatus = async () => {
+    try {
+      const response = await fetch('/api/notification-status');
+      const data = await response.json();
+      
+      if (data.success) {
+        setNotificationStatus(data.notifications);
+      }
+    } catch (error) {
+      console.error('알림 상태 조회 실패:', error);
+    }
+  };
+
   // 초기 로드 및 자동 새로고침
   useEffect(() => {
     fetchHealthStatus();
+    fetchNotificationStatus();
     
     if (autoRefresh) {
-      const interval = setInterval(fetchHealthStatus, 30000); // 30초마다
+      const interval = setInterval(() => {
+        fetchHealthStatus();
+        fetchNotificationStatus();
+      }, 30000); // 30초마다
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
@@ -114,6 +166,22 @@ export default function Home() {
                 자동 새로고침 (30초)
               </label>
               <button
+                onClick={runWebhookTest}
+                disabled={webhookLoading}
+                className="bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
+              >
+                {webhookLoading ? (
+                  <>
+                    <span className="animate-spin">⟳</span>
+                    테스트 중...
+                  </>
+                ) : (
+                  <>
+                    🧪 웹훅 테스트
+                  </>
+                )}
+              </button>
+              <button
                 onClick={runHealthCheck}
                 disabled={loading}
                 className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
@@ -145,6 +213,39 @@ export default function Home() {
             <div className="bg-red-50 rounded-lg p-4 border border-red-200">
               <div className="text-sm text-red-600 font-semibold mb-1">문제 서버</div>
               <div className="text-3xl font-bold text-red-900">{totalCount - healthyCount}</div>
+            </div>
+          </div>
+
+          {/* 알림 상태 표시 */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              🔔 알림 채널 상태
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${notificationStatus.slack ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span className="text-sm font-medium text-gray-700">Slack</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${notificationStatus.slack ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {notificationStatus.slack ? '활성화' : '비활성화'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${notificationStatus.mattermost ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span className="text-sm font-medium text-gray-700">Mattermost</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${notificationStatus.mattermost ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {notificationStatus.mattermost ? '활성화' : '비활성화'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${notificationStatus.email ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span className="text-sm font-medium text-gray-700">이메일</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${notificationStatus.email ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {notificationStatus.email ? '활성화' : '비활성화'}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 text-sm text-gray-600">
+              총 <span className="font-semibold text-indigo-600">{notificationStatus.total}</span>개의 알림 채널이 활성화되어 있습니다.
             </div>
           </div>
 
@@ -217,6 +318,8 @@ export default function Home() {
             <p>• Vercel Cron을 통해 5분마다 자동으로 헬스체크가 실행됩니다.</p>
             <p>• 서버에 문제가 발생하면 설정된 알림 채널로 알림을 전송합니다.</p>
             <p>• 대시보드는 30초마다 자동으로 업데이트됩니다.</p>
+            <p>• <strong>웹훅 테스트</strong> 버튼으로 알림 시스템을 테스트할 수 있습니다.</p>
+            <p>• 환경 변수가 주석 처리(`#`)되어 있으면 해당 알림 채널은 자동으로 비활성화됩니다.</p>
           </div>
         </div>
       </div>
